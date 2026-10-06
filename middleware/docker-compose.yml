@@ -1,0 +1,23 @@
+services:
+  middleware-node:
+    build:
+      context: .
+      dockerfile: docker/middleware-node.Dockerfile
+    container_name: middleware-node
+    networks:
+      sdv-net:
+        ipv4_address: 172.31.0.20
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      LD_LIBRARY_PATH: /usr/local/lib
+      VSOMEIP_CONFIGURATION: /app/configs/vsomeip/middleware-container.json
+    volumes:
+      - ./logs:/app/logs
+    command: sleep infinity
+
+networks:
+  sdv-net:
+    external: true
+    name: pointcloud_redirection_sdv-net

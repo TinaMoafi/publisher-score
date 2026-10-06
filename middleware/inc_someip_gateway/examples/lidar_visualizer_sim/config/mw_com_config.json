@@ -1,0 +1,50 @@
+{
+  "serviceTypes": [
+    {
+      "serviceTypeName": "/lidar/LidarFrame",
+      "version": {
+        "major": 1,
+        "minor": 0
+      },
+      "bindings": [
+        {
+          "binding": "SHM",
+          "serviceId": 4660,
+          "events": [
+            {
+              "eventName": "lidar_frame",
+              "eventId": 34680
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "serviceInstances": [
+    {
+      "instanceSpecifier": "lidar/LidarFrame1",
+      "serviceTypeName": "/lidar/LidarFrame",
+      "version": {
+        "major": 1,
+        "minor": 0
+      },
+      "instances": [
+        {
+          "instanceId": 22136,
+          "asil-level": "QM",
+          "binding": "SHM",
+          "events": [
+            {
+              "eventName": "lidar_frame",
+              "numberOfSampleSlots": 10,
+              "maxSubscribers": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "global": {
+    "asil-level": "B"
+  }
+}

@@ -1,0 +1,3 @@
+/app/publisher-node/build/CMakeFiles/lidar_csv_publisher.dir
+/app/publisher-node/build/CMakeFiles/edit_cache.dir
+/app/publisher-node/build/CMakeFiles/rebuild_cache.dir

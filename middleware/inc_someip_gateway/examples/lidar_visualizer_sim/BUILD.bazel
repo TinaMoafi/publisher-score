@@ -1,0 +1,110 @@
+# *******************************************************************************
+# Copyright (c) 2025 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
+load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
+
+cc_library(
+    name = "lidar_frame_types_cpp",
+    srcs = [
+        "src/lidar_frame_types.cpp",
+    ],
+    hdrs = [
+        "src/lidar_frame_types.h",
+    ],
+    features = COMPILER_WARNING_FEATURES,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/serializer:pre_serialized_data",
+        "@score_baselibs//score/language/futurecpp",
+        "@score_communication//score/mw/com",
+    ],
+)
+
+cc_library(
+    name = "lidar_frame_types_ipc_gen_cpp",
+    srcs = ["src/lidar_frame_types_ipc_gen.cpp"],
+    features = COMPILER_WARNING_FEATURES,
+    implementation_deps = [
+        ":lidar_frame_types_cpp",
+        "@score_communication//score/mw/com/impl/rust:bridge_macros",
+    ],
+)
+
+rust_library(
+    name = "lidar_frame_types",
+    srcs = ["src/lidar_frame_types.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lidar_frame_types_ipc_gen_cpp",
+        "@score_communication//score/mw/com/impl/rust:mw_com",
+    ],
+)
+
+# Native C++ subscriber.
+#
+# This deliberately uses the same PreSerializedData<> C++ type as gatewayd's
+# NullSerializer instead of reproducing that layout through the Rust bridge.
+cc_binary(
+    name = "lidar_visualizer_cpp",
+    srcs = ["src/lidar_visualizer.cpp"],
+    args = [
+        "-service_instance_manifest",
+        "$(rootpath config/mw_com_config.json)",
+    ],
+    data = ["config/mw_com_config.json"],
+    features = COMPILER_WARNING_FEATURES,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lidar_frame_types_cpp",
+        "@score_communication//score/mw/com",
+    ],
+)
+
+# Keep the existing Rust visualizer temporarily.
+# It is useful until the native C++ subscriber has been verified end-to-end.
+rust_binary(
+    name = "lidar_visualizer",
+    srcs = ["src/lidar_visualizer.rs"],
+    data = ["config/mw_com_config.json"],
+    features = ["link_std_cpp_lib"],
+    rustc_flags = ["-Clink-arg=-lstdc++"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lidar_frame_types",
+        "@score_communication//score/mw/com/impl/rust:mw_com",
+    ],
+)
+
+rust_binary(
+    name = "lidar_test_publisher",
+    srcs = ["src/lidar_test_publisher.rs"],
+    data = ["config/mw_com_config.json"],
+    features = ["link_std_cpp_lib"],
+    proc_macro_deps = [
+        "@car_window_sim_crate//:async-trait",
+    ],
+    rustc_flags = [
+        "-Clink-arg=-lstdc++",
+        "-Clink-arg=-lm",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lidar_frame_types",
+        "@car_window_sim_crate//:anyhow",
+        "@score_baselibs//score/mw/log",
+        "@score_communication//score/mw/com/impl/rust:mw_com",
+    ],
+)

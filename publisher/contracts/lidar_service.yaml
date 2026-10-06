@@ -1,0 +1,29 @@
+service_name: LidarPointCloudService
+
+someip:
+  service_id: 0x1234
+  instance_id: 0x5678
+  major_version: 1
+  minor_version: 0
+  eventgroup_id: 0x8778
+  event_id: 0x8778
+  protocol: udp
+  event_port: 30509
+  service_discovery:
+    multicast: 224.224.224.245
+    port: 30490
+
+publisher:
+  container_name: publisher-node
+  application_name: lidar_publisher
+  unicast: 172.31.0.10
+
+middleware:
+  container_name: middleware-node
+  unicast: 172.31.0.20
+
+payload:
+  source: data/lidar_data.csv
+  rays_per_frame: 36
+  expected_payload_bytes: 1020
+  format: binary

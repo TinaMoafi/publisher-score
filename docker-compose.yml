@@ -1,0 +1,45 @@
+services:
+  publisher-node:
+    build:
+      context: ./publisher
+      dockerfile: docker/publisher-node.Dockerfile
+    container_name: publisher-node
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      sdv-net:
+        ipv4_address: 172.31.0.10
+    environment:
+      VSOMEIP_CONFIGURATION: /app/publisher-node/config/vsomeip/publisher-container.json
+      LD_LIBRARY_PATH: /usr/local/lib
+    volumes:
+      - ./publisher:/app/publisher-node
+      - ./publisher/logs:/app/logs
+    command: sleep infinity
+
+  middleware-node:
+    build:
+      context: ./middleware
+      dockerfile: docker/middleware-node.Dockerfile
+    container_name: middleware-node
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      sdv-net:
+        ipv4_address: 172.31.0.20
+    environment:
+      LD_LIBRARY_PATH: /usr/local/lib
+      VSOMEIP_CONFIGURATION: /app/config/vsomeip/middleware-container.json
+    volumes:
+      - ./middleware/inc_someip_gateway:/app/inc_someip_gateway
+      - ./middleware/configs/vsomeip:/app/config/vsomeip:ro
+      - ./middleware/logs:/app/logs
+    working_dir: /app/inc_someip_gateway
+    command: sleep infinity
+
+networks:
+  sdv-net:
+    name: sdv-net
+    external: true

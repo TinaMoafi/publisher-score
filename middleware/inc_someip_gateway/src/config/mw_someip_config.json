@@ -1,0 +1,44 @@
+{
+    "service_types": [
+        {
+            "service_type_name": "window_control",
+            "service_id": 1,
+            "service_version_major": 1,
+            "service_version_minor": 0,
+            "events": [
+                {
+                    "event_name": "window_control",
+                    "event_id": 1
+                }
+            ],
+            "local_service_instances": [
+                {
+                    "instance_specifier": "gatewayd/application_window_control",
+                    "instance_id": 1
+                }
+            ]
+        },
+        {
+        "service_type_name": "lidar_frame",
+        "service_id": 4660,
+        "service_version_major": 1,
+        "service_version_minor": 0,
+        "events": [
+            {
+            "event_name": "lidar_frame",
+            "event_id": 34680,
+            "serialization_config_type": "NullSerializerConfig",
+            "serialization_config": {
+                "max_message_size": 65560
+            }
+            }
+        ],
+        "remote_service_instances": [
+            {
+            "instance_specifier": "lidar/LidarFrame1",
+            "instance_id": 22136
+            }
+        ]
+        }
+    ]
+}       

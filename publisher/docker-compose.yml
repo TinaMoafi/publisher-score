@@ -1,0 +1,23 @@
+services:
+  publisher-node:
+    build:
+      context: .
+      dockerfile: docker/publisher-node.Dockerfile
+    container_name: publisher-node
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      sdv-net:
+        ipv4_address: 172.31.0.10
+    environment:
+      VSOMEIP_CONFIGURATION: /app/publisher-node/config/vsomeip/publisher-container.json
+      LD_LIBRARY_PATH: /usr/local/lib
+    volumes:
+      - .:/app/publisher-node
+    command: sleep infinity
+
+networks:
+  sdv-net:
+    name: sdv-net
+    external: true
