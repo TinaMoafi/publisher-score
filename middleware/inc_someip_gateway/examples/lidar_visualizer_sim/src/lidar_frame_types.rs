@@ -11,41 +11,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // *******************************************************************************
 
-pub const MAX_LIDAR_PAYLOAD_SIZE: usize = 65560;
+///! This is the "generated" part for the ipc_bridge proxy. Its main purpose is to provide the imports
+///! of the type- and name-dependent part of the FFI and create the respective user-facing objects.
 
-#[repr(C, align(16))]
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct LidarFrame {
-    // C++ offset 0
-    pub size: usize,
-
-    // C++ data is alignas(std::max_align_t), therefore starts at offset 16.
-    pub _padding: [u8; 8],
-
-    // C++ offset 16
-    pub data: [u8; MAX_LIDAR_PAYLOAD_SIZE],
-
-    // 16-byte struct alignment rounds total size from 65576 to 65584.
-    pub _tail_padding: [u8; 8],
-}
-
-impl Default for LidarFrame {
-    fn default() -> Self {
-        Self {
-            size: 0,
-            _padding: [0; 8],
-            data: [0; MAX_LIDAR_PAYLOAD_SIZE],
-            _tail_padding: [0; 8],
-        }
-    }
-}
-
-impl std::fmt::Debug for LidarFrame {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LidarFrame")
-            .field("size", &self.size)
-            .finish()
-    }
+    pub timestamp_ns: u64,
+    pub frame_id: u32,
+    pub point_count: u32,
+    pub payload_size: u32,
 }
 
 mw_com::import_interface!(my_LidarFrameInterface, LidarFrameInterface, {

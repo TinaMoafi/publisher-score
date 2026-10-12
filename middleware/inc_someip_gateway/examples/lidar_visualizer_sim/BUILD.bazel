@@ -10,8 +10,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
@@ -27,7 +25,6 @@ cc_library(
     features = COMPILER_WARNING_FEATURES,
     visibility = ["//visibility:public"],
     deps = [
-        "//src/serializer:pre_serialized_data",
         "@score_baselibs//score/language/futurecpp",
         "@score_communication//score/mw/com",
     ],
@@ -53,28 +50,6 @@ rust_library(
     ],
 )
 
-# Native C++ subscriber.
-#
-# This deliberately uses the same PreSerializedData<> C++ type as gatewayd's
-# NullSerializer instead of reproducing that layout through the Rust bridge.
-cc_binary(
-    name = "lidar_visualizer_cpp",
-    srcs = ["src/lidar_visualizer.cpp"],
-    args = [
-        "-service_instance_manifest",
-        "$(rootpath config/mw_com_config.json)",
-    ],
-    data = ["config/mw_com_config.json"],
-    features = COMPILER_WARNING_FEATURES,
-    visibility = ["//visibility:public"],
-    deps = [
-        ":lidar_frame_types_cpp",
-        "@score_communication//score/mw/com",
-    ],
-)
-
-# Keep the existing Rust visualizer temporarily.
-# It is useful until the native C++ subscriber has been verified end-to-end.
 rust_binary(
     name = "lidar_visualizer",
     srcs = ["src/lidar_visualizer.rs"],
@@ -106,5 +81,21 @@ rust_binary(
         "@car_window_sim_crate//:anyhow",
         "@score_baselibs//score/mw/log",
         "@score_communication//score/mw/com/impl/rust:mw_com",
+    ],   
+)
+cc_binary(
+    name = "lidar_ipc_verifier",
+    srcs = ["src/lidar_ipc_verifier.cpp"],
+    args = [
+        "-service_instance_manifest",
+        "$(rootpath config/mw_com_config.json)",
+    ],
+    data = [
+        "config/mw_com_config.json",
+    ],
+    features = COMPILER_WARNING_FEATURES,
+    visibility = ["//visibility:public"],
+    deps = [
+        "@score_communication//score/mw/com",
     ],
 )

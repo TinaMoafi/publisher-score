@@ -14,6 +14,7 @@
 #include "remote_service_instance.h"
 
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 
 #include "score/containers/non_relocatable_vector.h"
@@ -121,6 +122,48 @@ RemoteServiceInstance::RemoteServiceInstance(
                               << rec_event_id << std::dec << ", dropping" << std::endl;
                     return;
                 }
+                // ================= DEBUG START =================
+
+                const auto* ipc_bytes =
+                    static_cast<const std::byte*>(sample.Get());
+
+                std::size_t ipc_size = 0U;
+
+                std::memcpy(
+                    &ipc_size,
+                    ipc_bytes,
+                    sizeof(ipc_size));
+
+                std::cout
+                    << "[gatewayd-debug] sample.Get()="
+                    << sample.Get()
+                    << " stored_size="
+                    << ipc_size
+                    << std::endl;
+
+                std::cout
+                    << "[gatewayd-debug] sample first 32 bytes:";
+
+                for (std::size_t i = 0U; i < 32U; ++i)
+                {
+                    const auto value =
+                        std::to_integer<unsigned int>(ipc_bytes[i]);
+
+                    std::cout
+                        << " "
+                        << std::hex
+                        << std::setw(2)
+                        << std::setfill('0')
+                        << value;
+                }
+
+                std::cout
+                    << std::dec
+                    << std::setfill(' ')
+                    << std::endl;
+
+                // ================== DEBUG END ==================
+
 
                 event_context.ipc_event->Send(std::move(sample));
                 std::cout << "[gatewayd] Forwarded event 0x" << std::hex << rec_event_id << std::dec
