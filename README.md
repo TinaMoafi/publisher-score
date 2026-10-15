@@ -1,66 +1,97 @@
-# LiDAR Communication Integration — Eclipse S-CORE
+# LiDAR Communication Gateway for Eclipse S-CORE
 
-## Purpose
+A reproducible integration environment for transporting LiDAR frames between external SOME/IP endpoints and applications using Eclipse S-CORE `mw::com` / LoLa inter-process communication (IPC).
 
-This project verifies the transport of simulated LiDAR frames from an external SOME/IP publisher into Eclipse S-CORE, through `someipd` and `gatewayd`, to a LoLa (`mw::com`) IPC subscriber. The next goal is to forward the same frame from IPC back to an external SOME/IP receiver.
+The project uses a simulated LiDAR publisher, a SOME/IP-to-IPC gateway, and a LoLa subscriber to exercise the communication boundary between an external ECU or sensor and S-CORE. The architecture also accommodates the reverse IPC-to-SOME/IP direction, enabling a received frame to be forwarded to an external ECU or test receiver. The applications can simply relay frames; no perception or vehicle-control algorithms are required to exercise the communication paths.
 
-**Current status:** Incoming SOME/IP → LoLa IPC verification passed. Outgoing IPC → SOME/IP and complete end-to-end payload comparison are not yet verified.
-
-## Architecture
+## System architecture
 
 ```text
 External LiDAR Publisher
-       | SOME/IP (Ethernet)
-       v
-     someipd
-       |
-     gatewayd (SOME/IP -> IPC)
-       | LoLa / mw::com
-       v
-LiDAR IPC Verifier / Subscriber   [VERIFIED]
-       | LoLa / mw::com (forwarding to be implemented)
-       v
-     gatewayd (IPC -> SOME/IP)    [NEXT]
-       |
-     someipd
-       | SOME/IP (Ethernet)
-       v
-External LiDAR Receiver          [NEXT]
+          |
+          | SOME/IP over Ethernet
+          v
+  +-----------------------------------------------+
+  |                 Eclipse S-CORE                |
+  |                                               |
+  |  someipd                                      |
+  |     |                                         |
+  |  gatewayd (SOME/IP -> IPC)                    |
+  |     |                                         |
+  |     | mw::com / LoLa                           |
+  |     v                                         |
+  |  LiDAR Subscriber / Forwarder                 |
+  |     |                                         |
+  |     | mw::com / LoLa                           |
+  |     v                                         |
+  |  gatewayd (IPC -> SOME/IP)                    |
+  |     |                                         |
+  |  someipd                                      |
+  +-----------------------------------------------+
+          |
+          | SOME/IP over Ethernet
+          v
+  External SOME/IP Receiver / ECU
 ```
 
-The same subscriber can be extended to republish the incoming sample; a separate S-CORE microservice is not required for the proposed forwarding test.
+The diagram represents the **intended full communication topology**, not a claim that every segment has been implemented. The incoming path (external SOME/IP → `someipd` → `gatewayd` → LoLa subscriber) has been exercised successfully. The outgoing forwarding path is part of the project architecture and requires its corresponding publisher, gateway configuration, and external receiver to be implemented and validated.
 
-## Tested data
+## Components
 
-| Property | Value |
-|---|---|
+| Component | Responsibility |
+| --- | --- |
+| External LiDAR publisher | Reads simulated LiDAR data, serializes a frame, and publishes it over SOME/IP. |
+| `someipd` | Handles the external SOME/IP communication interface. |
+| `gatewayd` | Bridges SOME/IP events and S-CORE `mw::com` events. |
+| LoLa / `mw::com` | Delivers events between processes using shared-memory IPC. |
+| LiDAR subscriber / IPC verifier | Subscribes to LoLa samples and checks the received LiDAR frame representation. |
+| LiDAR forwarder | Application role that receives a LoLa sample and republishes it for outbound delivery; it can be incorporated into the existing subscriber. |
+| External receiver | Test endpoint or ECU that receives outbound SOME/IP events and validates the forwarded payload. |
+
+## LiDAR message format
+
+The test dataset uses **36 LiDAR rays per frame** and a **1020-byte serialized application payload**. The incoming SOME/IP event is configured as follows:
+
+| Parameter | Value |
+| --- | --- |
 | Service ID | `0x1234` |
 | Instance ID | `0x5678` |
-| Incoming event ID | `0x8778` |
-| Serialized LiDAR payload | 1020 bytes |
-| Ray count | 36 |
-| LoLa sample slot stride | 65,584 bytes |
-| LoLa sample alignment | 16 bytes |
-| LoLa sample slots | 10 |
+| Event ID | `0x8778` |
+| SOME/IP application payload length | 1020 bytes |
+| LiDAR ray count | 36 |
 
-In the verified generic LoLa sample, the first four bytes encode the payload length (`fc 03 00 00` = 1020, little-endian), bytes 4–15 are zero, and the LiDAR payload begins at **sample offset 16**. The payload begins with a 4-byte `ray_count` (`24 00 00 00` = 36) followed by an 8-byte `frame_timestamp` (`double`). Consult the publisher's serialization code for the complete per-ray field layout; full 36-ray decoding is not yet validated.
+The serialized application payload begins with a 32-bit ray count and a 64-bit floating-point frame timestamp. Its per-ray layout is defined by the publisher's serialization implementation; use that implementation as the authoritative reference for field types and byte offsets.
 
-## Runtime environment
+In the generic LoLa representation observed by the IPC verifier, the sample includes a 16-byte prefix before the serialized application payload:
 
-The previous successful test used separate Docker containers:
+```text
+LoLa sample offset   Content
+------------------   -----------------------------------------
+0x00 - 0x03          Serialized payload length: 1020 (uint32)
+0x04 - 0x0F          Prefix / reserved bytes (zero in test)
+0x10 - 0x13          LiDAR ray count: 36 (uint32)
+0x14 - 0x1B          Frame timestamp (double)
+0x1C onward          Serialized ray data
+```
 
-| Role | Container | Application directory | IP in tested setup |
-|---|---|---|---|
-| Publisher | `publisher-node` | `/app/publisher-node` | `172.31.0.10` |
-| Middleware | `middleware-node` | `/app/inc_someip_gateway` | `172.31.0.20` |
+This is the **observed generic sample layout**, not a universal LoLa wire-format specification. The application payload is 1020 bytes; the LoLa sample-storage allocation can be larger. Do not confuse the two sizes.
 
-IP addresses are configuration-specific. Start the project's Docker Compose environment before running the commands below.
+## Development environment
 
-## Reproduce the incoming communication test
+The integration has been exercised using two Docker containers:
 
-Use separate terminals in the middleware container and start the publisher **last**. Avoid duplicate instances of the daemons and verifier.
+| Role | Container | Working directory | Example Docker-network IP |
+| --- | --- | --- | --- |
+| SOME/IP publisher | `publisher-node` | `/app/publisher-node` | `172.31.0.10` |
+| S-CORE middleware | `middleware-node` | `/app/inc_someip_gateway` | `172.31.0.20` |
 
-**Terminal 1 — gatewayd**
+Prerequisites are a working Docker/Compose environment for the repository, its Bazel toolchain and external dependencies, and the project's SOME/IP and `mw::com` configuration files. The example IPs belong to the tested Docker network and should not be treated as universal defaults.
+
+Start the repository's configured containers before running the processes below. Use separate terminals; the first three commands run **inside the middleware container**, while the publisher command runs **inside the publisher container**.
+
+## Build and run
+
+### 1. Build and start the gateway
 
 ```bash
 cd /app/inc_someip_gateway
@@ -68,7 +99,7 @@ bazel build //src/gatewayd:gatewayd_example
 bazel run //src/gatewayd:gatewayd_example
 ```
 
-**Terminal 2 — someipd**
+### 2. Start the SOME/IP daemon
 
 ```bash
 cd /app/inc_someip_gateway
@@ -76,55 +107,100 @@ unset LD_LIBRARY_PATH
 bazel run //src/someipd:someipd_example
 ```
 
-**Terminal 3 — IPC verifier**
+`LD_LIBRARY_PATH` is cleared here to avoid the library-selection issue encountered in the tested container setup; other environments may not require this adjustment.
+
+### 3. Start the LoLa IPC verifier
 
 ```bash
 cd /app/inc_someip_gateway
 bazel run //examples/lidar_visualizer_sim:lidar_ipc_verifier
 ```
 
-**Terminal 4 — publisher container**
+The verifier uses the service-instance configuration at:
+
+```text
+examples/lidar_visualizer_sim/config/mw_com_config.json
+```
+
+### 4. Start the external LiDAR publisher
 
 ```bash
 cd /app/publisher-node
 bash scripts/lidar-node-publisher.sh
 ```
 
-If the processes have startup dependencies in your checkout, follow the existing deployment scripts or logs. The verifier uses `examples/lidar_visualizer_sim/config/mw_com_config.json` for its service configuration.
+Start the publisher after the receiving components so its events can be observed. The publisher may exit after sending its configured dataset.
 
-## Expected output
+## Verify communication
 
-Gateway:
+The gateway should log reception of the configured event and its application-payload length:
 
 ```text
 [gatewayd] Received SOME/IP event: event=0x8778 payload=1020B
-[LOLA-PRODUCER] first32: fc 03 00 00 ... 24 00 00 00 ...
 ```
 
-Verifier (observed successful test):
+The IPC verifier should locate the application payload within the LoLa sample and decode its header:
 
 ```text
 [ipc-verifier] candidate LiDAR payload offset=16
 [ipc-verifier] candidate ray_count=36
-[ipc-verifier] candidate frame_timestamp=9.2099899999999995
+[ipc-verifier] candidate frame_timestamp=...
 [ipc-verifier] PASS: found possible 1020-byte LiDAR payload at offset 16
 ```
 
-The timestamp is an example, not a fixed expected value. `PASS` demonstrates that the verifier found the expected payload header and decoded the timestamp; it does **not** establish byte-for-byte equality for all 1020 bytes or validate all 36 ray records.
+The timestamp varies by frame. This `PASS` checks the presence and interpretation of the expected payload header; it is **not** a complete comparison of all 1020 bytes or a full validation of every ray record.
 
-## Troubleshooting
+### Communication test matrix
 
-- **Verifier reads unexpected bytes:** inspect producer/consumer slot addresses and the LoLa data mapping. A previous bug caused the producer to use sample storage offset 296 while the consumer used 368.
-- **`OffsetPtr` bounds-check error:** check for stale processes and shared-memory mappings before attempting a clean restart. Do not delete a shared-memory file still mapped by a process.
-- **`someipd` library/ABI problem:** the tested setup used `unset LD_LIBRARY_PATH` before starting it.
-- **Missing Bazel target or configuration:** confirm your checkout includes the verifier target and its `mw_com_config.json`.
+| Communication path | Acceptance criterion | Available verification |
+| --- | --- | --- |
+| External SOME/IP → S-CORE IPC | LoLa subscriber identifies the 1020-byte frame and decodes the 36-ray header. | Exercised successfully using the IPC verifier. |
+| S-CORE IPC → external SOME/IP | External receiver obtains the republished application payload. | Requires outbound forwarding and receiver integration. |
+| End-to-end relay | Compare the complete 1020-byte source payload against the external receiver's payload, frame by frame. | Requires both paths connected and a byte-level comparator. |
 
-## Source changes and reproducibility warning
+For an end-to-end comparison, capture the **1020-byte serialized application payload** at both endpoints, identify corresponding frames (for example using a frame sequence or timestamp), and compare their bytes. Avoid comparing SOME/IP transport headers or LoLa storage prefixes as if they were part of the application payload.
 
-Two LoLa fixes were made in Bazel's `external/score_communication+` source tree. **Do not assume these fixes were included in the main repository commit.** See [technical roadmap](docs/LIDAR_COMMUNICATION_ROADMAP.md) for exact edits and a plan to preserve them as a patch or upstream change. Verify the dependency version and apply the fixes in a reproducible way before claiming a clean checkout works.
+## Code organization
 
-## Next milestone
+The paths below are relative to `/app/inc_someip_gateway`:
 
-Extend the existing IPC subscriber so it can publish the same received LiDAR payload on an outgoing LoLa event. Configure `gatewayd` and `someipd` for IPC → SOME/IP, implement an external SOME/IP test receiver, and compare all 1020 bytes with the publisher's original frame.
+```text
+src/
+  someipd/                         SOME/IP daemon application
+  gatewayd/                        SOME/IP / IPC gateway application
+examples/
+  lidar_visualizer_sim/
+    BUILD.bazel                    Bazel build targets
+    config/mw_com_config.json     mw::com service-instance configuration
+    src/lidar_ipc_verifier.cpp    Generic LoLa receive-side verification
+    src/lidar_frame_types.*       LiDAR-related data types / serialization code
+```
 
-See [LiDAR communication roadmap](docs/LIDAR_COMMUNICATION_ROADMAP.md).
+The publisher is maintained under `/app/publisher-node`; its startup entry point is `scripts/lidar-node-publisher.sh`.
+
+For development, consult the gateway service-instance configuration, event IDs, and publisher serialization before adding a new event or changing the payload layout. The outbound event may require a distinct service/event mapping from the incoming event.
+
+## Extending the integration
+
+The communication design supports the following implementation work without introducing additional S-CORE microservices:
+
+1. **Subscriber and forwarder:** extend the LiDAR subscriber to publish the received application payload through a LoLa skeleton event. Preserve the original bytes when testing transport integrity.
+2. **Outbound gateway binding:** configure `gatewayd` to consume the outgoing LoLa event and transmit a SOME/IP event through `someipd`.
+3. **External receiver:** subscribe to the outgoing SOME/IP service/event from outside the S-CORE container and capture each 1020-byte application payload.
+4. **End-to-end test:** compare the payloads at the publisher and receiver and report frame matches, missing frames, and byte mismatches.
+
+A separate process can be added if isolation is required, but it is not necessary merely to test the IPC-to-SOME/IP path.
+
+## Troubleshooting and reproducibility
+
+- **No incoming events:** check container connectivity, SOME/IP service/event identifiers, publisher startup, and `someipd`/`gatewayd` logs.
+- **No LoLa samples:** check the `mw::com` service-instance manifest, gateway offering, subscriber discovery, and process startup order.
+- **Unexpected sample bytes:** distinguish the LoLa sample prefix from the application payload and check that the producer and consumer reference the same sample-buffer location.
+- **Shared-memory startup errors:** ensure stale gateway/verifier processes are stopped before attempting a clean restart. Do not remove `/dev/shm` objects that are still mapped by running processes.
+- **Dependency reproducibility:** the tested environment required corrections to generic LoLa sample-buffer pointer handling in `score_communication` (`skeleton_memory_manager.cpp` and `skeleton.cpp`). These edits were originally made under Bazel's external dependency directory; **a fresh clone is not guaranteed to contain them**. Preserve the corrected dependency as a pinned version, reproducible patch, or upstream change before distributing a turnkey build.
+
+The technical investigation and exact pointer corrections are documented separately in [`docs/LIDAR_COMMUNICATION_ROADMAP.md`](docs/LIDAR_COMMUNICATION_ROADMAP.md). That report is developer-facing debugging history; this README is the project entry point.
+
+## Scope
+
+This repository setup focuses on communication transport, event forwarding, serialization boundaries, and payload integrity. It does not depend on object detection, sensor fusion, or actuation logic. Security properties (authentication, anti-spoofing, confidentiality, and IPC access control) require separate threat modeling and verification; successful payload delivery alone does not establish a secure channel.
