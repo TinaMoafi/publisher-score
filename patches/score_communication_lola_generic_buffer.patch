@@ -1,0 +1,27 @@
+diff --git a/score/mw/com/impl/bindings/lola/skeleton_memory_manager.cpp b/score/mw/com/impl/bindings/lola/skeleton_memory_manager.cpp
+--- a/score/mw/com/impl/bindings/lola/skeleton_memory_manager.cpp
++++ b/score/mw/com/impl/bindings/lola/skeleton_memory_manager.cpp
+@@ -262,7 +262,7 @@
+     SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(inserted_meta_info.second,
+                                                 "Couldn't register/emplace event-meta-info in data-section.");
+ 
+-    return data_storage;
++    return event_data_raw_array;
+ }
+ 
+ auto SkeletonMemoryManager::OpenEventDataControlCompositeFromOpenedSharedMemory(const ElementFqId element_fq_id)
+diff --git a/score/mw/com/impl/bindings/lola/skeleton.cpp b/score/mw/com/impl/bindings/lola/skeleton.cpp
+--- a/score/mw/com/impl/bindings/lola/skeleton.cpp
++++ b/score/mw/com/impl/bindings/lola/skeleton.cpp
+@@ -505,9 +505,9 @@
+         memory_manager_.RollbackSkeletonTracingTransactions(
+             skeleton_event_data_control_local_qm, skeleton_event_data_control_local_qm.GetTransactionLogSet());
+ 
+-        auto& event_data_storage = memory_manager_.OpenEventDataFromOpenedSharedMemory<std::uint8_t>(element_fq_id);
++        auto& event_data_storage = memory_manager_.OpenEventDataFromOpenedSharedMemory<std::max_align_t>(element_fq_id);
+ 
+-        return {static_cast<void*>(&event_data_storage), event_data_control_composite};
++        return {static_cast<void*>(event_data_storage.data()), event_data_control_composite};
+     }
+ 
+     auto* const type_erased_event_data_storage = memory_manager_.CreateGenericEventDataInCreatedSharedMemory(
