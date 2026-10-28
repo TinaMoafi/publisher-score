@@ -47,13 +47,17 @@ The verifier reports a LoLa sample **storage slot of 65584 bytes**, not a 65584-
 
 ## Validation protocol
 
-1. Start from a rebuilt and LoLa-corrected middleware environment. [Setup](DOCKER_SETUP.md) specifies startup order.
-2. Start `someipd`, then `gatewayd`, then the `lidar_ipc_verifier`, and finally publisher.
-3. Confirm gateway logs show `event=0x8778 payload=1020B` and forwarded IPC event.
-4. Confirm verifier logs show `candidate ray_count=36` and `PASS` with offset 16.
-5. Record dependency version, git commit, container images, and representative logs for reproducibility.
+1. Prepare the middleware environment, including Docker networking, multicast routing, the manual LoLa dependency corrections, and the required Bazel builds. Follow [Setup and operation](DOCKER_SETUP.md) for the complete procedure.
+2. Start `gatewayd`, followed by `someipd`, `lidar_ipc_verifier`, and finally the LiDAR publisher.
+3. Verify that `someipd` enters its routing and network processing loops.
+4. Confirm that the IPC verifier discovers the configured service and subscribes to `lidar_frame`.
+5. Confirm that the gateway receives SOME/IP events with `event=0x8778` and `payload=1020B` and reports forwarding them to IPC subscribers.
+6. Confirm that the verifier recognizes `ray_count=36` and reports `PASS` at payload offset 16.
+7. Record the dependency version, Git commit, Docker configuration, and representative application logs for reproducibility.
 
-### Result observed on 2026-10-27
+### Validation result
+
+The following output demonstrates successful structural reception of a LiDAR frame through LoLa IPC:
 
 ```text
 [ipc-verifier] ===== frame 28 =====
@@ -65,10 +69,19 @@ The verifier reports a LoLa sample **storage slot of 65584 bytes**, not a 65584-
 
 | Test | Status | Evidence / remaining work |
 | --- | --- | --- |
-| SOME/IP publisher to gateway | Passed | 1020-byte event log |
-| Gateway to LoLa verifier | Passed, structural | 36 rays, expected prefix and timestamp |
-| All ray fields and byte-for-byte identity | Not established | Need full payload capture and comparator |
-| Outbound LoLa → SOME/IP | Not implemented/validated | Need forwarder and outgoing gateway binding |
-| External receiver integration | Not established | Need SOME/IP receiver and event capture |
+| SOME/IP publisher to gateway | Passed | Gateway reports reception of 1020-byte LiDAR events |
+| Gateway to LoLa IPC verifier | Passed — structural | Expected ray count, timestamp and payload offset recognized |
+| Full payload integrity | Not yet verified | Requires byte-for-byte comparison of all payload fields |
+| Frame loss and ordering | Not yet measured | Requires sequence tracking and frame-count comparison |
+| Outbound LoLa → SOME/IP forwarding | Planned | Requires local IPC publisher and outbound gateway configuration |
+| External SOME/IP subscriber | Planned | Requires subscriber implementation and reception validation |
 
-For full integrity validation, collect exactly the 1020 application bytes at the source and destination, correlate frames by timestamp/sequence, compare bytes, and count missing/reordered frames. Exclude SOME/IP headers and the LoLa prefix from byte comparison.
+### Validation limitations
+
+The current implementation verifies the successful reception and structural recognition of the expected LiDAR application payload through the inbound SOME/IP–LoLa communication path.
+
+It does not establish byte-for-byte identity, zero frame loss, latency performance, or outbound communication.
+
+For complete data-integrity validation, capture the 1020 application-payload bytes at both the publisher and IPC receiver. Correlate frames using timestamps or explicit sequence numbers, compare their contents, and identify missing or reordered frames.
+
+SOME/IP transport headers and the observed 16-byte LoLa sample prefix must be excluded from application-payload comparisons.
